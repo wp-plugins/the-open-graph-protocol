@@ -3,7 +3,7 @@
  * Plugin Name: The Open Graph Protocol
  * Plugin URI: http://niftytheme.com
  * Description: The Open Graph protocol enables any web page to become a rich object in a social graph.
- * Version: 0.1
+ * Version: 0.2
  * Author: Luis Alberto Ochoa Esparza
  * Author URI: http://luisalberto.org
  *
@@ -18,14 +18,17 @@
  * to the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * @package Open Graph Protocol
- * @version 0.1
+ * @version 0.2
  * @author Luis Alberto Ochoa Esparza <soy@luisalberto.org>
- * @copyright Copyright (C) 2011, Luis Alberto Ochoa Esparza
+ * @copyright Copyright (C) 2011-2012, Luis Alberto Ochoa Esparza
  * @license http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
  */
 
 /* Add Open Graph Metadata to the <head> area. */
 add_action( 'wp_head', 'ogp_head_metadata', 1 );
+
+/* Generates an excerpt from the description. */
+add_filter( 'ogp_get_the_description', 'ogp_trim_description', 15 );
 
 /**
  * Display the HTML for the OGP metadata.
@@ -42,7 +45,7 @@ function ogp_head_metadata() {
 	foreach( $metadata as $property => $content )
 		$meta[] = "<meta property='og:{$property}' content='{$content}' />";
 
-	echo apply_filters( 'ogp_head_metadata', join( PHP_EOL, $meta ) );
+	echo apply_filters( 'ogp_head_metadata', join( PHP_EOL, $meta ) ) . PHP_EOL;
 }
 
 /**
@@ -63,7 +66,8 @@ function ogp_get_metadata() {
 	if ( is_front_page() && !is_paged() ) {
 
 		$metadata = apply_filters( 'ogp_get_home_metadata', array(
-			'type' => 'website'
+			'type'        => 'website',
+			'description' => get_bloginfo( 'description' )
 		) );
 	}
 
@@ -71,7 +75,8 @@ function ogp_get_metadata() {
 	if ( is_home() ) {
 
 		$metadata = apply_filters( 'ogp_get_blog_metadata', array(
-			'type' => 'blog'
+			'type'        => 'blog',
+			'description' => get_bloginfo( 'description' )
 		) );
 	}
 
@@ -81,6 +86,7 @@ function ogp_get_metadata() {
 		$metadata = apply_filters( "ogp_get_{$object->post_type}_metadata", array(
 			'title'          => get_the_title(),
 			'type'           => 'article',
+			'description'    => ogp_get_the_description(),
 			'url'            => get_permalink(),
 			'image'          => ogp_get_the_image_post( $object->ID ),
 			'published_time' => get_post_time( 'l, F jS, Y, g:i a' ),
@@ -232,3 +238,48 @@ function ogp_get_the_image_by_default() {
 	return apply_filters( 'ogp_get_the_image_by_default', plugin_dir_url ( __FILE__ ) . 'default.png' );
 }
 
+/**
+ * This function generates the content.
+ *
+ * @since 0.2
+ * @return string Description
+ */
+function ogp_get_the_description() {
+	global $wp_query;
+
+	$description = '';
+
+	/* Get the excerpt */
+	$description = get_post_field( 'post_excerpt', $wp_query->post->ID );
+
+	/* Get the content */
+	if ( empty( $description ) )
+		$description = get_post_field( 'post_content', $wp_query->post->ID );
+
+	return apply_filters( 'ogp_get_the_description', $description );
+}
+
+/**
+ * Generates an excerpt from the description.
+ *
+ * The 25 word limit can be modified by plugins/themes using the 'ogp_trim_description_length' filter
+ *
+ * @since 0.2
+ *
+ * @param string $description The excerpt. If set to empty, an excerpt is generated.
+ * @return string The excerpt.
+ */
+function ogp_trim_description( $description ) {
+
+	/* Prepare the description. */
+	$description = strip_shortcodes( $description );
+	$description = str_replace(']]>', ']]&gt;', $description);
+
+	/* Description length */
+	$length = apply_filters( 'ogp_trim_description_length', 25 );
+
+	/* Limit the description */
+	$description = wp_trim_words( $description, $length, '...' );
+
+	return $description;
+}
